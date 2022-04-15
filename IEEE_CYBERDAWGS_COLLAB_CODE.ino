@@ -1,11 +1,28 @@
 /*********
   Rui Santos
-  Complete project details at http://randomnerdtutorials.com
-*********/
+  Complete project details at https://RandomNerdTutorials.com/esp32-hc-sr04-ultrasonic-arduino/
 
-// Load Wi-Fi library
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files.
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+*********/
 #include <WiFi.h>
 #include <Servo.h>
+
+TaskHandle_t Task1;
+
+const int trigPin = 5;
+const int echoPin = 18;
+
+//define sound speed in cm/uS
+#define SOUND_SPEED 0.034
+#define CM_TO_INCH 0.393701
+
+long duration;
+float distanceCm;
+float distanceInch;
 
 Servo myservo;
 // Replace with your network credentials
@@ -32,7 +49,6 @@ unsigned long previousTime = 0;
 const long timeoutTime = 2000;
 
 void setup() {
-
   myservo.attach(13);  // attaches the servo on pin 13 to the servo object
   Serial.begin(115200);
   // Initialize the output variables as outputs
@@ -54,7 +70,49 @@ void setup() {
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
   server.begin();
+
+  pinMode(trigPin, OUTPUT); // Sets the trigPin as an Output
+  pinMode(echoPin, INPUT); // Sets the echoPin as an Input
+
+  xTaskCreatePinnedToCore(
+                    Task1code,   /* Task function. */
+                    "Task1",     /* name of task. */
+                    10000,       /* Stack size of task */
+                    NULL,        /* parameter of the task */
+                    1,           /* priority of the task */
+                    &Task1,      /* Task handle to keep track of created task */
+                    1);          /* pin task to core 0 */
 }
+
+void Task1code( void * pvParameters ) {
+  for (;;) {
+    // Clears the trigPin
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    // Sets the trigPin on HIGH state for 10 micro seconds
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+
+    // Reads the echoPin, returns the sound wave travel time in microseconds
+    duration = pulseIn(echoPin, HIGH);
+
+    // Calculate the distance
+    distanceCm = duration * SOUND_SPEED / 2;
+
+    // Prints the distance in the Serial Monitor
+      Serial.print("Distance (cm): ");
+      Serial.println(distanceCm);
+
+    if ((distanceCm < 10) && (distanceCm > 5)) {
+      myservo.write(90);
+      delay(10000);
+      myservo.write(0);
+    }
+    delay(100);
+  }
+}
+
 
 void loop() {
   WiFiClient client = server.available();   // Listen for incoming clients
@@ -85,12 +143,12 @@ void loop() {
             if (header.indexOf("GET /26/on") >= 0) {
               Serial.println("GPIO 26 on");
               output26State = "on";
-                myservo.write(90);
+              myservo.write(90);
               digitalWrite(output26, HIGH);
             } else if (header.indexOf("GET /26/off") >= 0) {
               Serial.println("GPIO 26 off");
               output26State = "off";
-                myservo.write(0);
+              myservo.write(0);
               digitalWrite(output26, LOW);
             }
 
